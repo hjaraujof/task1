@@ -1,6 +1,13 @@
-# python-boilerplate
+# graphite-task
 
 ```
+# Initial requirements
+- Python 3.8+ installed
+- virtualenv package installed 
+
+# Install virtualenv package
+pip install virtualenv
+
 # Creating the virtual environment
 virtualenv venv
 
