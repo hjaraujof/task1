@@ -1,6 +1,8 @@
 attrs==19.3.0
 Automat==0.8.0
+beautifulsoup4==4.9.3
 blinker==1.4
+bs4==0.0.1
 certifi==2019.11.28
 chardet==3.0.4
 Click==7.0
@@ -67,6 +69,7 @@ simplejson==3.16.0
 six==1.14.0
 smart-open==4.1.0
 sos==4.0
+soupsieve==2.1
 ssh-import-id==5.10
 systemd-python==234
 tqdm==4.55.1

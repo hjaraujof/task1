@@ -1,5 +1,5 @@
-import urllib
-from flask import Flask
+from helpers import BasicTextExtractFromWebsite, SingleDocTFIDFHelper
+from flask import Flask, jsonify
 from flask import request
 app = Flask(__name__)
 
@@ -14,6 +14,14 @@ def tfidf_url():
     url = request.args.get('url', '')
     limit = request.args.get('limit', '')
     if url != '' and limit != '':
-        return urllib.parse.unquote(url) + ' ' + limit, 200
+        scraped_text = BasicTextExtractFromWebsite(url).scrapeTHSOOT()
+        tfidf = SingleDocTFIDFHelper(scraped_text)
+        tfidf.normalize()
+        tfidf.execTFIDF(limit)
+        return jsonify({
+            "tfidf": tfidf.response_obj,
+            "word_count": tfidf.total_words,
+            "word_count_dict": tfidf.word_count_dict
+        })
     else:
-        return 'Error on params', 400
+        return jsonify(error='Error on params')

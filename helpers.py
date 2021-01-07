@@ -1,17 +1,19 @@
 import re
-import string
 import unidecode
 import math
+import urllib.request
+import itertools
+from bs4 import BeautifulSoup
+import nltk
 from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
 
 class SingleDocTFIDFHelper:
     def __init__(self, original_text):
+        print(type(original_text))
         self.original_text = original_text
-        self.stop_words = set(stopwords.words('english'))
-        self.punctuation_table = string.maketrans('', '', string.punctuation)
         self.word_set = []
         self.word_count_dict = {}
         self.normalized_words = []
@@ -21,57 +23,73 @@ class SingleDocTFIDFHelper:
         self.tfidf_dict = {}
         self.response_obj = {}
         self.response_obj['terms'] = []
+        nltk.download('stopwords')
+        nltk.download('punkt')
+        from nltk.corpus import stopwords
+        self.stop_words = set(stopwords.words('english'))
+        self.lemmatizer = WordNetLemmatizer()
 
     # Remove single/repeated whitespaces from input text
-    def remove_whitespaces(str_input):
+    def remove_whitespaces(self, str_input):
         return re.split(' +', str_input)
 
+    # Remove all line breaks from input text
+    def remove_linebreaks_whitespaces(self, str_input):
+        text = " ".join(str_input.splitlines())
+        return " ".join(text.split())
+
     # Tokenizes the sentences within given string
-    def sentence_tokenizer(str_input):
+    def sentence_tokenizer(self, str_input):
         return sent_tokenize(str_input)
 
     # Tokenizes the words within given string
-    def word_tokenizer(str_input):
+    def word_tokenizer(self, str_input):
         return word_tokenize(str_input)
 
     # Removes all stopwords from string
     def remove_stopwords(self, word_array):
         filtered_words = []
         for word in word_array:
-            if word not in self.stop_words:
+            if ((word not in self.stop_words) and
+               (len(word) > 1) and (bool(re.match("^[a-z]*$", word)))):
+                word = self.remove_whitespaces(word)
                 filtered_words.append(word)
         return filtered_words
 
     # Lowercases string
-    def to_lower_case(str_input):
+    def to_lower_case(self, str_input):
         return str_input.lower()
 
     # Removes '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~' punctuation marks
     def remove_punctuation(self, str_input):
-        return str_input.translate(self.punctuation_table)
+        # return str_input.translate(string.punctuation)
+        return re.sub(r'[^\w\s]', '', str_input)
 
     # Removes remaining special unicode chars, like accents or quotation marks
     # Basically converts a unicode string to an ASCII string
-    def remove_unicode_chars(str_input):
+    def remove_unicode_chars(self, str_input):
         return unidecode.unidecode(str_input)
 
     # Normalize the original text and return the relevant terms
     def normalize(self):
-        text = self.remove_whitespaces(self.original_text)
-        text = self.remove_unicode_chars(text)
+        # text = self.remove_punctuation(self.original_text)
+        # print(text)
+        text = self.remove_unicode_chars(self.original_text)
+        text = self.remove_linebreaks_whitespaces(text)
+        text = self.remove_punctuation(text)
+        # print(text)
         text = self.to_lower_case(text)
-        sentences = self.sentence_tokenizer(text)
         normalized_words = []
-        for sent in sentences:
-            sent = self.remove_punctuation(sent)
-            sent = sent.strip()  # strip leading/trailing whitespace
-            words = self.word_tokenizer(sent)
-            filtered_words = self.remove_stopwords(words)
-            normalized_words.extend(filtered_words)
-        self.normalized_words = normalized_words
-        self.word_set = set(normalized_words)
+        words = self.word_tokenizer(text)
+        filtered_words = self.remove_stopwords(words)
+        normalized_words.extend(filtered_words)
+        flattened = list(itertools.chain(*normalized_words))
+        self.normalized_words = flattened
+        # print(self.normalized_words)
+        self.word_set = set(self.normalized_words)
+        self.idf_dict = dict.fromkeys(self.word_set, 0)
         self.word_count_dict = dict.fromkeys(self.word_set, 0)
-        self.total_words = len(normalized_words)
+        self.total_words = len(self.normalized_words)
 
     # Count frecuency of each relevant term
     def count_words(self):
@@ -81,16 +99,18 @@ class SingleDocTFIDFHelper:
     # Calculate the term frecuency
     def calculate_tf(self):
         for word, f in self.word_count_dict.items():
+            print(f'TF for "{word}" is: {f/float(self.total_words)}')
             self.tf_dict[word] = f/float(self.total_words)
 
     # Calculate the inverse data frecuency
     def calculate_idf(self):
-        N = 1  # We only use a single document
-        self.idf_dict = dict.fromkeys(self.word_set, 0)
+        N = 1  # We evaluate for a single document
         for word, val in self.word_count_dict.items():
             if val > 0:
                 self.idf_dict[word] += 1
+        print(self.idf_dict)
         for word, val in self.idf_dict.items():
+            print(f'IDF for "{word}" is: {math.log10(N / float(val))}')
             self.idf_dict[word] = math.log10(N / float(val))
 
     # Finally calculate TFIDF
@@ -99,7 +119,7 @@ class SingleDocTFIDFHelper:
             self.tfidf_dict[word] = tf * self.idf_dict[word]
 
     # Execute all
-    def exec(self, limit):
+    def execTFIDF(self, limit):
         self.normalize()
         self.count_words()
         self.calculate_tf()
@@ -109,7 +129,7 @@ class SingleDocTFIDFHelper:
         return self.response_obj
 
     # Sort desc and limit final TFIDF dict
-    def sort_n_limit_dic(d, limit):
+    def sort_n_limit_dic(self, d, limit):
         result = {}
         for k, v in sorted(d.items(), key=lambda item: item[1], reverse=True):
             if(limit > 0):
@@ -121,6 +141,18 @@ class SingleDocTFIDFHelper:
 
     # Convert tfidf dic to desired format
     def convert_dict_to_response_obj(self, limit):
-        final_tfidf_dict = self.sort_n_limit_dic(self.tfidf_dict, limit)
+        final_tfidf_dict = self.sort_n_limit_dic(self.tfidf_dict, int(limit))
         for term, val in final_tfidf_dict.items():
             self.response_obj['terms'].append({'term': term, 'tf-idf': val})
+
+
+class BasicTextExtractFromWebsite:
+    def __init__(self, url):
+        self.site_url = url
+
+    def scrapeTHSOOT(self):
+        content = urllib.request.urlopen(self.site_url)
+        read_content = content.read()
+        soup = BeautifulSoup(read_content, 'html.parser')
+        return soup.get_text(" ")
+        # return " ".join(soup.strings)
