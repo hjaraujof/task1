@@ -3,16 +3,20 @@ import unidecode
 import math
 import urllib.request
 import itertools
+import csv
+import sys
+import time
 from bs4 import BeautifulSoup
 import nltk
 from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
+csv.field_size_limit(sys.maxsize)
 
 
 class SingleDocTFIDFHelper:
     def __init__(self, original_text):
-        print(type(original_text))
+        tic = time.time()
         self.original_text = original_text
         self.word_set = []
         self.word_count_dict = {}
@@ -28,6 +32,8 @@ class SingleDocTFIDFHelper:
         from nltk.corpus import stopwords
         self.stop_words = set(stopwords.words('english'))
         self.lemmatizer = WordNetLemmatizer()
+        toc = time.time()
+        print('__init__ took ' + str(toc - tic) + 's')
 
     # Remove single/repeated whitespaces from input text
     def remove_whitespaces(self, str_input):
@@ -51,7 +57,7 @@ class SingleDocTFIDFHelper:
         filtered_words = []
         for word in word_array:
             if ((word not in self.stop_words) and
-               (len(word) > 1) and (bool(re.match("^[a-z]*$", word)))):
+                    (len(word) > 1) and (bool(re.match("^[a-z]*$", word)))):
                 word = self.remove_whitespaces(word)
                 filtered_words.append(word)
         return filtered_words
@@ -74,6 +80,7 @@ class SingleDocTFIDFHelper:
     def normalize(self):
         # text = self.remove_punctuation(self.original_text)
         # print(text)
+        tic = time.time()
         text = self.remove_unicode_chars(self.original_text)
         text = self.remove_linebreaks_whitespaces(text)
         text = self.remove_punctuation(text)
@@ -90,28 +97,47 @@ class SingleDocTFIDFHelper:
         self.idf_dict = dict.fromkeys(self.word_set, 0)
         self.word_count_dict = dict.fromkeys(self.word_set, 0)
         self.total_words = len(self.normalized_words)
+        toc = time.time()
+        print('normalize: ' + str(toc - tic) + 's')
 
     # Count frecuency of each relevant term
     def count_words(self):
+        tic = time.time()
         for word in self.normalized_words:
             self.word_count_dict[word] += 1
+        toc = time.time()
+        print('count_words: ' + str(toc - tic) + 's')
 
     # Calculate the term frecuency
     def calculate_tf(self):
+        tic = time.time()
         for word, f in self.word_count_dict.items():
-            print(f'TF for "{word}" is: {f/float(self.total_words)}')
             self.tf_dict[word] = f/float(self.total_words)
+        toc = time.time()
+        print('calculate_tf: ' + str(toc - tic) + 's')
 
     # Calculate the inverse data frecuency
     def calculate_idf(self):
-        N = 1  # We evaluate for a single document
-        for word, val in self.word_count_dict.items():
-            if val > 0:
-                self.idf_dict[word] += 1
-        print(self.idf_dict)
+        tic = time.time()
+        with open('articles1.csv') as csvfile:
+            reader = csv.DictReader(csvfile)
+            read_toc = time.time()
+            print('csvReader took ' + str(read_toc - tic) + 's')
+            N = 0
+            for row in reader:
+                N += 1
+                for word, value in self.word_count_dict.items():
+                    if value > 1:
+                        content = row['content']
+                        if f' {word} ' in f' {content} ':
+                            self.idf_dict[word] += 1
+            count_toc = time.time()
+            print('Initial idf calc took ' + str(count_toc - read_toc) + 's')
         for word, val in self.idf_dict.items():
-            print(f'IDF for "{word}" is: {math.log10(N / float(val))}')
-            self.idf_dict[word] = math.log10(N / float(val))
+            if val > 0:
+                self.idf_dict[word] = math.log10(N / float(val))
+        toc = time.time()
+        print('calculate_idf: ' + str(toc - count_toc) + 's')
 
     # Finally calculate TFIDF
     def calculate_tfidf(self):
@@ -155,4 +181,3 @@ class BasicTextExtractFromWebsite:
         read_content = content.read()
         soup = BeautifulSoup(read_content, 'html.parser')
         return soup.get_text(" ")
-        # return " ".join(soup.strings)
